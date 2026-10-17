@@ -3,6 +3,7 @@ import LogoMailcheap from "@/components/LogoMailcheap";
 import NavFooter from "@/components/NavFooter";
 import NavLinks from "@/components/NavLinks";
 import NavMobile from "@/components/NavMobile";
+import { Toaster } from "@/components/ui/sonner";
 import { requireSession } from "@/lib/auth";
 
 export default async function AppLayout({ children }) {
@@ -24,6 +25,7 @@ export default async function AppLayout({ children }) {
 			<main className="min-w-0 flex-1">
 				<div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-10 md:py-10">{children}</div>
 			</main>
+			<Toaster position="bottom-right" />
 		</div>
 	);
 }

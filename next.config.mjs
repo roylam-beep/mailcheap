@@ -19,6 +19,10 @@ const SECURITY_HEADERS = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	poweredByHeader: false,
+	experimental: {
+		// The `radix-ui` package re-exports every primitive. This loads only the ones each file names.
+		optimizePackageImports: ["radix-ui"],
+	},
 	images: {
 		remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }],
 	},

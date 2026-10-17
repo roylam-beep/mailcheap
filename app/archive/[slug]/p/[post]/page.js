@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
 import BadgeDate from "@/components/BadgeDate";
@@ -39,22 +40,11 @@ export default async function IssuePage({ params }) {
 	const page = await getIssuePage(params);
 	if (!page) notFound();
 	const { newsletter, issue } = page;
-
-	const [more, readers] = await Promise.all([
-		listArchiveIssues(newsletter._id, { limit: 3, excludeId: issue._id }),
-		countReaders(newsletter._id.toString()),
-	]);
 	const urls = getArchiveUrls(newsletter);
 	const body = renderIssueBody(issue);
 	const date = getIssueDate(issue);
 	const views = issue.webViews ?? 0;
 	const author = getArchiveAuthor(newsletter);
-	const pitch = {
-		name: newsletter.name,
-		slug: newsletter.slug,
-		imageUrl: newsletter.imageUrl,
-		description: newsletter.description,
-	};
 
 	return (
 		<>
@@ -103,6 +93,31 @@ export default async function IssuePage({ params }) {
 				)}
 			</article>
 
+			<Suspense fallback={<IssueTailFallback />}>
+				<IssueTail newsletter={newsletter} issue={issue} />
+			</Suspense>
+
+			<TriggerSubscribe newsletterSlug={newsletter.slug} />
+			<TrackView issueId={issue._id.toString()} />
+		</>
+	);
+}
+
+async function IssueTail({ newsletter, issue }) {
+	const [more, readers] = await Promise.all([
+		listArchiveIssues(newsletter._id, { limit: 3, excludeId: issue._id }),
+		countReaders(newsletter._id.toString()),
+	]);
+	const urls = getArchiveUrls(newsletter);
+	const pitch = {
+		name: newsletter.name,
+		slug: newsletter.slug,
+		imageUrl: newsletter.imageUrl,
+		description: newsletter.description,
+	};
+
+	return (
+		<>
 			<section id="subscribe" className={cn("mx-auto max-w-2xl scroll-mt-24 px-5 pt-16", more.length === 0 && "pb-24")}>
 				<div className="rounded-2xl bg-card px-6 py-10 shadow-border sm:px-10">
 					<PitchSubscribe newsletter={pitch} readers={readers} />
@@ -129,9 +144,14 @@ export default async function IssuePage({ params }) {
 					</ol>
 				</section>
 			)}
-
-			<TriggerSubscribe newsletterSlug={newsletter.slug} />
-			<TrackView issueId={issue._id.toString()} />
 		</>
+	);
+}
+
+function IssueTailFallback() {
+	return (
+		<section className="mx-auto max-w-2xl px-5 pt-16 pb-24">
+			<div className="h-64 animate-pulse rounded-2xl bg-muted" />
+		</section>
 	);
 }

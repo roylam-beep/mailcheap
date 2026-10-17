@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useEffectEvent, useMemo, useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { Check, CircleAlert, Copy, FlaskConical, Loader2, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { duplicateCampaign, saveCampaign, sendTestCampaign } from "@/app/(app)/campaigns/actions";
@@ -9,7 +10,6 @@ import BadgeStatus from "@/components/BadgeStatus";
 import DialogDiscardCampaign from "@/components/DialogDiscardCampaign";
 import DialogScheduleCampaign from "@/components/DialogScheduleCampaign";
 import DialogSendCampaign from "@/components/DialogSendCampaign";
-import EditorRich from "@/components/EditorRich";
 import HeaderPage from "@/components/HeaderPage";
 import InputCampaignSlug from "@/components/InputCampaignSlug";
 import ListChecks from "@/components/ListChecks";
@@ -30,6 +30,12 @@ import { slugify } from "@/lib/slug";
 import { useAutosave } from "@/lib/use-autosave";
 
 const UPLOADING_MESSAGE = "Wait for images to finish uploading";
+
+// TipTap stays out of the campaign page's first script. HTML issues never load it; rich issues load it
+// as their own chunk. The placeholder matches the editor's own empty state.
+const EditorRich = dynamic(() => import("@/components/EditorRich"), {
+	loading: () => <div className="min-h-[560px]" />,
+});
 
 export default function FormCampaign({
 	campaign,
