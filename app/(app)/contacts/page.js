@@ -41,18 +41,16 @@ export default async function ContactsPage({ searchParams }) {
 	const page = Math.max(1, Number.parseInt(params.page, 10) || 1);
 
 	await connectDb();
-	const newsletters = await Newsletter.find().sort({ createdAt: 1 }).select(NEWSLETTER_SUMMARY_FIELDS).lean();
-	const newsletterOptions = toNewsletterOptions(newsletters);
-	const newsletterMap = toNewsletterMap(newsletters);
-
 	const baseFilter = {
 		...(newsletterId && { newsletterId: new Types.ObjectId(newsletterId) }),
 		...(query && { email: { $regex: `^${escapeRegex(query)}` } }),
 	};
 	const filter = { ...baseFilter, ...(status && { status }) };
 
-	// One count per status reads only the status indexes; grouping the contacts would read every one.
-	const [statusCounts, contacts] = await Promise.all([
+	// The newsletter list doesn't change the contact query, so they share one round trip. One count per
+	// status reads only the status indexes; grouping the contacts would read every one.
+	const [newsletters, statusCounts, contacts] = await Promise.all([
+		Newsletter.find().sort({ createdAt: 1 }).select(NEWSLETTER_SUMMARY_FIELDS).lean(),
 		Promise.all(CONTACT_STATUSES.map((key) => Contact.countDocuments({ ...baseFilter, status: key }))),
 		Contact.find(filter)
 			.sort({ subscribedAt: -1, _id: -1 })
@@ -60,6 +58,8 @@ export default async function ContactsPage({ searchParams }) {
 			.limit(PAGE_SIZE)
 			.lean(),
 	]);
+	const newsletterOptions = toNewsletterOptions(newsletters);
+	const newsletterMap = toNewsletterMap(newsletters);
 	const counts = Object.fromEntries(CONTACT_STATUSES.map((key, index) => [key, statusCounts[index]]));
 	const totalAll = statusCounts.reduce((sum, count) => sum + count, 0);
 	const total = status ? counts[status] || 0 : totalAll;

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
 import CardIssue from "@/components/CardIssue";
@@ -24,14 +25,7 @@ export default async function ArchivePage({ params }) {
 	const newsletter = await getArchiveNewsletter((await params).slug);
 	if (!newsletter) notFound();
 
-	const [issues, readers] = await Promise.all([
-		listArchiveIssues(newsletter._id),
-		countReaders(newsletter._id.toString()),
-	]);
-	const urls = getArchiveUrls(newsletter);
-	const pinned = issues.filter((issue) => issue.archivePinned);
-	const latest = pinned.length > 0 ? null : issues[0];
-	const rest = pinned.length > 0 ? issues.filter((issue) => !issue.archivePinned) : issues.slice(1);
+	const readers = await countReaders(newsletter._id.toString());
 
 	return (
 		<>
@@ -73,6 +67,22 @@ export default async function ArchivePage({ params }) {
 				</div>
 			</section>
 
+			<Suspense fallback={<ArchiveIssuesFallback />}>
+				<ArchiveIssueLists newsletter={newsletter} />
+			</Suspense>
+		</>
+	);
+}
+
+async function ArchiveIssueLists({ newsletter }) {
+	const issues = await listArchiveIssues(newsletter._id);
+	const urls = getArchiveUrls(newsletter);
+	const pinned = issues.filter((issue) => issue.archivePinned);
+	const latest = pinned.length > 0 ? null : issues[0];
+	const rest = pinned.length > 0 ? issues.filter((issue) => !issue.archivePinned) : issues.slice(1);
+
+	return (
+		<>
 			{pinned.length > 0 && (
 				<section style={{ "--stagger": 5 }} className="mx-auto max-w-5xl px-5 animate-enter">
 					<h2 className="mb-6 text-sm font-medium text-muted-foreground">Featured</h2>
@@ -119,5 +129,14 @@ export default async function ArchivePage({ params }) {
 				</section>
 			)}
 		</>
+	);
+}
+
+function ArchiveIssuesFallback() {
+	return (
+		<section className="mx-auto max-w-5xl px-5 pb-24">
+			<div className="mb-4 h-5 w-24 animate-pulse rounded bg-muted" />
+			<div className="aspect-[1200/630] max-h-80 animate-pulse rounded-xl bg-muted" />
+		</section>
 	);
 }

@@ -23,14 +23,14 @@ export default async function CampaignPage({ params }) {
 	await connectDb();
 	const campaign = await Campaign.findById(id).lean();
 	if (!campaign) notFound();
-	const newsletter = await Newsletter.findById(campaign.newsletterId).lean();
-	if (!newsletter) notFound();
 
 	if (!["draft", "scheduled"].includes(campaign.status)) {
-		const [providers, remainingCount] = await Promise.all([
+		const [newsletter, providers, remainingCount] = await Promise.all([
+			Newsletter.findById(campaign.newsletterId).lean(),
 			getProviderBreakdown(campaign._id),
 			countRemaining(campaign),
 		]);
+		if (!newsletter) notFound();
 		return (
 			<CampaignReport
 				campaign={serialize(campaign)}
@@ -41,11 +41,13 @@ export default async function CampaignPage({ params }) {
 		);
 	}
 
-	const [audienceCount, domains, sendTimes] = await Promise.all([
-		Contact.countDocuments({ newsletterId: newsletter._id, status: "active" }),
+	const [newsletter, audienceCount, domains, sendTimes] = await Promise.all([
+		Newsletter.findById(campaign.newsletterId).lean(),
+		Contact.countDocuments({ newsletterId: campaign.newsletterId, status: "active" }),
 		listSesDomains(),
 		getSendTimes(campaign),
 	]);
+	if (!newsletter) notFound();
 	const fromDomain = newsletter.fromEmail.split("@")[1];
 	const isDomainVerified =
 		Array.isArray(domains) && domains.some(({ domain, verified }) => domain === fromDomain && verified);

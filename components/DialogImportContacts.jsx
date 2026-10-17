@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileUp, Loader2, Upload } from "lucide-react";
-import Papa from "papaparse";
 import { toast } from "sonner";
 import { importContacts } from "@/app/(app)/contacts/actions";
 import AvatarNewsletter from "@/components/AvatarNewsletter";
@@ -58,10 +57,11 @@ export default function DialogImportContacts({ newsletters, defaultNewsletterId 
 		setProgress(null);
 	}
 
-	function onFileChange(event) {
+	async function onFileChange(event) {
 		const selected = event.target.files?.[0];
 		if (!selected) return;
 		setFile(selected);
+		const { default: Papa } = await import("papaparse");
 		Papa.parse(selected, {
 			header: true,
 			skipEmptyLines: true,
