@@ -4,9 +4,9 @@ Mailcheap is provided as is, with no security support and no promise of fixes. I
 
 ## What's built in
 
-- One admin login. Login attempts are rate limited per IP, and every login, new API key and send is logged and, with `ALERT_FROM` set, emailed to `ADMIN_EMAIL`.
+- Team logins. The first owner is created from `ADMIN_EMAIL` and `ADMIN_PASSWORD` when no users exist. Passwords are scrypt hashes. Login attempts are rate limited per IP, and every login, new API key and send is logged and, with `ALERT_FROM` set, emailed to `ADMIN_EMAIL`.
 - Mailcheap refuses to start with an `ADMIN_PASSWORD` under 12 characters or a `SESSION_SECRET` under 32.
-- Sessions last 7 days, in an httpOnly cookie (`__Host-` prefixed in production) signed with a key derived from `SESSION_SECRET`. Changing `ADMIN_PASSWORD` or `ADMIN_EMAIL` signs out every session.
+- Sessions last 7 days, in an httpOnly cookie (`__Host-` prefixed in production) signed with a key derived from `SESSION_SECRET`. The token names that user and a version of their password hash, so changing their password signs out only them. Owners manage the team, domains, newsletter from-addresses and API keys. Members can work on campaigns, contacts and sending.
 - Every dashboard page, API route and server action checks the session. Public routes are limited to what readers, mail providers, AWS SNS and QStash need.
 - API keys are stored as SHA-256 hashes and can be revoked.
 - Unsubscribe, confirmation, "keep sending it" and tracking links are signed with keys derived from `SESSION_SECRET`. Rotating it logs you out and breaks those links in emails already sent.

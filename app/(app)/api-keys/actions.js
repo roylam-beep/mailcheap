@@ -5,12 +5,14 @@ import { revalidatePath } from "next/cache";
 import { notifyActivity } from "@/lib/alerts";
 import { generateApiKey } from "@/lib/api-keys";
 import { requireSession } from "@/lib/auth";
+import { OWNER_ONLY, canManageApiKeys } from "@/lib/roles";
 import { getAppUrl } from "@/lib/config";
 import { connectDb } from "@/lib/db";
 import ApiKey from "@/models/ApiKey";
 
 export async function createApiKey(_state, formData) {
-	await requireSession();
+	const session = await requireSession();
+	if (!canManageApiKeys(session.role)) return { error: OWNER_ONLY };
 	const name = String(formData.get("name") ?? "")
 		.trim()
 		.slice(0, 60);
@@ -26,7 +28,8 @@ export async function createApiKey(_state, formData) {
 }
 
 export async function revokeApiKey(id) {
-	await requireSession();
+	const session = await requireSession();
+	if (!canManageApiKeys(session.role)) return { error: OWNER_ONLY };
 	if (!isValidObjectId(id)) return { error: "Key not found" };
 
 	await connectDb();

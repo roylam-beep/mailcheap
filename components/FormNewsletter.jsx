@@ -21,7 +21,14 @@ import { cn } from "@/lib/utils";
 
 const IMAGE_PREVIEW_PATTERN = /^(https:\/\/\S+\.\S{2,}\/\S+|\/\S+\.\w{3,4})$/;
 
-export default function FormNewsletter({ newsletter, verifiedDomains, isSendingEnabled, testEmail, cleanupTotals }) {
+export default function FormNewsletter({
+	newsletter,
+	verifiedDomains,
+	isSendingEnabled,
+	testEmail,
+	cleanupTotals,
+	canEditSender = true,
+}) {
 	const [state, action, isPending] = useActionState(saveNewsletter, null);
 	const [isTesting, startTesting] = useTransition();
 	const [name, setName] = useState(newsletter?.name ?? "");
@@ -45,7 +52,8 @@ export default function FormNewsletter({ newsletter, verifiedDomains, isSendingE
 	const deferredWelcome = useDeferredValue(welcome);
 
 	useEffect(() => {
-		if (state?.ok) toast.success("Saved");
+		if (state?.ok && state.warning) toast.warning(state.warning);
+		else if (state?.ok) toast.success("Saved");
 		if (state?.error) toast.error(state.error);
 	}, [state]);
 
@@ -171,14 +179,22 @@ export default function FormNewsletter({ newsletter, verifiedDomains, isSendingE
 				</Field>
 				<Field
 					label="From email"
-					hint={isDomainUnverified ? `${fromDomain} is not verified in SES` : null}
-					isWarning
+					hint={[
+						isDomainUnverified
+							? `${fromDomain} is not verified in SES. Drafts can be saved; a send stays blocked until it is.`
+							: null,
+						canEditSender ? null : "Only an owner can change the from address.",
+					]
+						.filter(Boolean)
+						.join(" ")}
+					isWarning={isDomainUnverified}
 				>
 					<Input
 						name="fromEmail"
 						type="email"
 						value={fromEmail}
 						required
+						readOnly={!canEditSender}
 						placeholder="hi@mail.example.com"
 						onChange={(event) => setFromEmail(event.target.value)}
 					/>

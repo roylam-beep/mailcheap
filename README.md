@@ -94,7 +94,7 @@ Plan for about an hour, most of it waiting for DNS and for AWS to approve produc
 
 1. Click **Deploy** above.
 2. Fill in `MONGODB_URI`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (at least 12 characters) and `SESSION_SECRET` (at least 32; generate it with `openssl rand -base64 48`). With shorter ones, Mailcheap refuses to start and the logs say which one to fix.
-3. Open `https://<your-project>.vercel.app/login` and log in.
+3. Open `https://<your-project>.vercel.app/login` and log in. That first login creates the owner. Invite the rest of the company from **Team**. Members can run campaigns, contacts and sending. Owners also manage the team, sending domains, newsletter from-addresses and API keys.
 
 Sending is off until you finish the next steps, so nothing can go out by mistake. On any other Node.js host: `npm ci && npm run build && npm start`, with the same variables, behind HTTPS.
 
@@ -104,14 +104,15 @@ If you plan to use your own domain for the dashboard (like `mailcheap.example.co
 
 Use one AWS region for everything below (the examples use `us-east-1`).
 
-1. **Verify a sending domain.** In the SES console, go to **Identities > Create identity > Domain**. Use a subdomain like `mail.example.com`, so your main domain's email is unaffected. Keep Easy DKIM with RSA 2048 and add the 3 CNAME records SES gives you at your DNS provider.
-2. **Set a custom MAIL FROM domain.** On the identity, open **Custom MAIL FROM domain > Edit**, use `bounce.mail.example.com`, and add the MX and TXT records SES shows. This aligns SPF with your domain.
-3. **Add DMARC** if your root domain doesn't have one: a TXT record at `_dmarc.example.com` with `v=DMARC1; p=none;` to start. Gmail and Yahoo require DMARC from bulk senders.
-4. **Request production access.** New accounts are in the sandbox (200 emails a day, verified recipients only). In **Account dashboard > Request production access**, pick Marketing, and explain that readers opt in, that bounces and complaints are suppressed automatically, and that every email has one-click unsubscribe. AWS usually answers within a day.
-5. **Create a configuration set**, named `mailcheap` for example, under **Configuration sets**. Leave SES open and click tracking off: Mailcheap tracks on your own domain.
-6. **Create an SNS topic.** In the SNS console, create a standard topic, like `mailcheap-ses-events`, and copy its ARN. Then switch it to signature version 2, which signs messages with SHA256 instead of SHA1: `aws sns set-topic-attributes --topic-arn <topic-arn> --attribute-name SignatureVersion --attribute-value 2`.
-7. **Send SES events to the topic.** In the configuration set, open **Event destinations > Add destination**. Select hard bounces, complaints, deliveries, delivery delays, rejects and rendering failures, then pick Amazon SNS and your topic.
-8. **Create an IAM user for Mailcheap** with this policy, then create an access key for it:
+1. **Add a sending domain** on the **Domains** page (or in the SES console: **Identities > Create identity > Domain**). Use a subdomain like `mail.example.com`, so your main domain's email is unaffected. Mailcheap creates the identity with Easy DKIM and sets the custom MAIL FROM domain to `bounce.<domain>`. Copy the records it shows into DNS at whatever host you use. There is no DNS-provider API.
+2. **DKIM** is three CNAME records, `{token}._domainkey.<domain>` pointing at `{token}.dkim.amazonses.com`.
+3. **SPF** is the custom MAIL FROM host: an MX `10 feedback-smtp.<region>.amazonses.com` and a TXT `v=spf1 include:amazonses.com ~all`, both on `bounce.<domain>`.
+4. **DMARC** is a TXT at `_dmarc.<domain>` (the domain you added, including a subdomain). Suggested value: `v=DMARC1; p=none; rua=mailto:<address>`. The address is a newsletter from-address already on that domain, or `dmarc@<domain>` if there isn't one. `p=none` does not reject mail when that mailbox is missing; create it only if you want the reports. A record you already publish at `_dmarc.<parent>` covers a subdomain too.
+5. **Request production access.** New accounts are in the sandbox (200 emails a day, verified recipients only). In **Account dashboard > Request production access**, pick Marketing, and explain that readers opt in, that bounces and complaints are suppressed automatically, and that every email has one-click unsubscribe. AWS usually answers within a day.
+6. **Create a configuration set**, named `mailcheap` for example, under **Configuration sets**. Leave SES open and click tracking off: Mailcheap tracks on your own domain.
+7. **Create an SNS topic.** In the SNS console, create a standard topic, like `mailcheap-ses-events`, and copy its ARN. Then switch it to signature version 2, which signs messages with SHA256 instead of SHA1: `aws sns set-topic-attributes --topic-arn <topic-arn> --attribute-name SignatureVersion --attribute-value 2`.
+8. **Send SES events to the topic.** In the configuration set, open **Event destinations > Add destination**. Select hard bounces, complaints, deliveries, delivery delays, rejects and rendering failures, then pick Amazon SNS and your topic.
+9. **Create an IAM user for Mailcheap** with this policy, then create an access key for it. `ses:CreateEmailIdentity` and `ses:PutEmailIdentityMailFromAttributes` let the Domains page create the identity and the custom MAIL FROM domain:
 
 ```json
 {
@@ -127,17 +128,23 @@ Use one AWS region for everything below (the examples use `us-east-1`).
     },
     {
       "Effect": "Allow",
-      "Action": ["ses:GetAccount", "ses:ListEmailIdentities", "ses:GetEmailIdentity"],
+      "Action": [
+        "ses:GetAccount",
+        "ses:ListEmailIdentities",
+        "ses:GetEmailIdentity",
+        "ses:CreateEmailIdentity",
+        "ses:PutEmailIdentityMailFromAttributes"
+      ],
       "Resource": "*"
     }
   ]
 }
 ```
 
-9. **Add the variables in Vercel** and redeploy: `SES_REGION`, `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_CONFIGURATION_SET` and `SES_SNS_TOPIC_ARN`.
-10. **Subscribe Mailcheap to the topic.** In the SNS topic, **Create subscription** with protocol HTTPS and endpoint `https://<your-app>/api/webhooks/ses`. Leave raw message delivery off. Mailcheap confirms the subscription by itself; refresh and the status turns to Confirmed.
+10. **Add the variables in Vercel** and redeploy: `SES_REGION`, `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_CONFIGURATION_SET` and `SES_SNS_TOPIC_ARN`.
+11. **Subscribe Mailcheap to the topic.** In the SNS topic, **Create subscription** with protocol HTTPS and endpoint `https://<your-app>/api/webhooks/ses`. Leave raw message delivery off. Mailcheap confirms the subscription by itself; refresh and the status turns to Confirmed.
 
-The **Domains** page in Mailcheap now shows your domain with its DKIM and MAIL FROM status. Optional: in SES **Account dashboard > Suppression list**, turn on the account-level list for bounces and complaints too.
+The **Domains** page lists every sending domain, with DKIM, SPF / MAIL FROM and DMARC records to copy, and a check against public DNS. **Check DNS** re-reads SES and marks each record found or missing. Optional: in SES **Account dashboard > Suppression list**, turn on the account-level list for bounces and complaints too.
 
 ### 4. QStash
 
@@ -179,7 +186,7 @@ A local MongoDB works: `docker run -d -p 27017:27017 mongo` and `MONGODB_URI=mon
 ## Deliverability basics
 
 - **Send from a subdomain** (`mail.example.com`), so a bad week doesn't affect your main domain's email.
-- **Authenticate everything:** DKIM (Easy DKIM), SPF through the custom MAIL FROM domain, and DMARC on the root domain.
+- **Authenticate everything:** DKIM (Easy DKIM), SPF through the custom MAIL FROM domain, and DMARC (`p=none` to start). The Domains page lists those records and checks public DNS.
 - **Only email people who asked.** Never import a bought or scraped list. If bots fill your forms, turn on confirmed opt-in.
 - **Warm up a new domain.** Send to your most engaged readers first, and grow each send over a few weeks.
 - **Watch complaints and bounces.** Keep complaints under 0.1% and bounces under 2%. Mailcheap pauses a send above 0.08% complaints or 2% bounces. Add your domain to [Google Postmaster Tools](https://postmaster.google.com) to see your spam rate at Gmail.
@@ -192,8 +199,8 @@ A local MongoDB works: `docker run -d -p 27017:27017 mongo` and `MONGODB_URI=mon
 | Variable | Required | What it does |
 | --- | --- | --- |
 | `MONGODB_URI` | Yes | MongoDB connection string with a database name |
-| `ADMIN_EMAIL` | Yes | Dashboard login, and where test emails and alerts go |
-| `ADMIN_PASSWORD` | Yes | Dashboard password, 12+ characters. Changing it signs out every session. |
+| `ADMIN_EMAIL` | Yes | First owner's email, and where test emails and alerts go |
+| `ADMIN_PASSWORD` | Yes | First owner's password, 12+ characters, until it is changed on the Team page. Changing a password signs out that person. |
 | `SESSION_SECRET` | Yes | Signs sessions and email links. 32+ random characters. Changing it breaks links in sent emails. |
 | `APP_URL` | On other hosts | Public URL of the app. On Vercel it defaults to the production domain. |
 | `SENDING_ENABLED` | To send | Nothing is sent unless it's `true` |
