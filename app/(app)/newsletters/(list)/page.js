@@ -4,32 +4,40 @@ import AvatarNewsletter from "@/components/AvatarNewsletter";
 import HeaderPage from "@/components/HeaderPage";
 import StateEmpty from "@/components/StateEmpty";
 import { Button } from "@/components/ui/button";
+import { requireSession } from "@/lib/auth";
 import { listNewslettersWithActiveCounts } from "@/lib/contacts";
 import { connectDb } from "@/lib/db";
 import { formatNumber } from "@/lib/format";
+import { canEditNewsletterSender } from "@/lib/roles";
 
 export const metadata = { title: "Newsletters" };
 
 export default async function NewslettersPage() {
+	const session = await requireSession();
+	const canCreate = canEditNewsletterSender(session.role);
 	await connectDb();
 	const newsletters = await listNewslettersWithActiveCounts();
 
 	return (
 		<>
 			<HeaderPage title="Newsletters">
-				<Button asChild>
-					<Link href="/newsletters/new">
-						<Plus data-icon="inline-start" />
-						New
-					</Link>
-				</Button>
+				{canCreate && (
+					<Button asChild>
+						<Link href="/newsletters/new">
+							<Plus data-icon="inline-start" />
+							New
+						</Link>
+					</Button>
+				)}
 			</HeaderPage>
 
 			{newsletters.length === 0 ? (
 				<StateEmpty icon={Newspaper} title="No newsletters yet">
-					<Button asChild variant="outline">
-						<Link href="/newsletters/new">Create a newsletter</Link>
-					</Button>
+					{canCreate && (
+						<Button asChild variant="outline">
+							<Link href="/newsletters/new">Create a newsletter</Link>
+						</Button>
+					)}
 				</StateEmpty>
 			) : (
 				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

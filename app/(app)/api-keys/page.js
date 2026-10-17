@@ -13,7 +13,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { requireSession } from "@/lib/auth";
 import { getAppUrl } from "@/lib/config";
+import { canManageApiKeys } from "@/lib/roles";
 import { connectDb } from "@/lib/db";
 import { formatDate, formatRelative } from "@/lib/format";
 import ApiKey from "@/models/ApiKey";
@@ -21,15 +23,15 @@ import ApiKey from "@/models/ApiKey";
 export const metadata = { title: "API keys" };
 
 export default async function ApiKeysPage() {
+	const session = await requireSession();
+	const canManage = canManageApiKeys(session.role);
 	await connectDb();
 	const apiKeys = await ApiKey.find().sort({ createdAt: -1 }).select("-hash").lean();
 	const examples = getExamples(getAppUrl());
 
 	return (
 		<>
-			<HeaderPage title="API keys">
-				<DialogCreateApiKey />
-			</HeaderPage>
+			<HeaderPage title="API keys">{canManage && <DialogCreateApiKey />}</HeaderPage>
 
 			<div className="flex flex-col gap-8">
 				{apiKeys.length === 0 ? (
@@ -60,9 +62,9 @@ export default async function ApiKeysPage() {
 										<TableCell className="pr-2 text-right">
 											{apiKey.revokedAt ? (
 												<BadgeStatus status="revoked" />
-											) : (
+											) : canManage ? (
 												<ButtonRevokeApiKey id={apiKey._id.toString()} name={apiKey.name} />
-											)}
+											) : null}
 										</TableCell>
 									</TableRow>
 								))}

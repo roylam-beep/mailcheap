@@ -9,6 +9,9 @@ import { CLEANUP_LIMITS } from "@/lib/cleanup";
 import { isSendingEnabled } from "@/lib/config";
 import { getConfirmationProblem } from "@/lib/confirmation-content";
 import { connectDb } from "@/lib/db";
+import { getVerifiedHostnames } from "@/lib/domains";
+import { emailHost } from "@/lib/dns-records";
+import { OWNER_ONLY, canEditNewsletterSender, canSend } from "@/lib/roles";
 import { MAX_AUTHOR_BIO_LENGTH, MAX_DESCRIPTION_LENGTH } from "@/lib/newsletters";
 import { sendWelcomeTestEmail } from "@/lib/sending";
 import { parseSocialLinks } from "@/lib/social";
@@ -98,7 +101,8 @@ function validateNewsletter(values) {
 
 // Sending errors become toasts; a thrown error would replace the page with the error boundary.
 export async function sendWelcomeTest(newsletterId) {
-	await requireSession();
+	const session = await requireSession();
+	if (!canSend(session.role)) return { error: "You don't have permission to do that" };
 	if (!isSendingEnabled()) return { error: "Sending is off" };
 	try {
 		await sendWelcomeTestEmail({ newsletterId, to: process.env.ADMIN_EMAIL });
@@ -110,13 +114,21 @@ export async function sendWelcomeTest(newsletterId) {
 }
 
 export async function saveNewsletter(_state, formData) {
-	await requireSession();
+	const session = await requireSession();
 	const id = readText(formData, "id");
 	if (id && !isValidObjectId(id)) return { error: "Newsletter not found" };
+	if (!id && !canEditNewsletterSender(session.role)) return { error: OWNER_ONLY };
 
 	const values = readNewsletter(formData);
 	const error = validateNewsletter(values);
 	if (error) return { error };
+
+	await connectDb();
+	if (id && !canEditNewsletterSender(session.role)) {
+		const existing = await Newsletter.findById(id).select("fromEmail").lean();
+		if (!existing) return { error: "Newsletter not found" };
+		if (existing.fromEmail !== values.fromEmail) return { error: OWNER_ONLY };
+	}
 	// A collapsed email section sends no fields, and what it had saved stays as it is.
 	const { welcome, confirmation, ...rest } = values;
 	const document = {
@@ -126,7 +138,6 @@ export async function saveNewsletter(_state, formData) {
 		...(formData.has("confirmationSubject") && { confirmation }),
 	};
 
-	await connectDb();
 	let createdId;
 	try {
 		if (id) await Newsletter.updateOne({ _id: id }, { $set: document }, { runValidators: true });
@@ -139,5 +150,11 @@ export async function saveNewsletter(_state, formData) {
 	revalidatePath("/newsletters");
 	revalidateArchive();
 	if (createdId) redirect(`/newsletters/${createdId}`);
-	return { ok: true, savedAt: Date.now() };
+
+	const host = emailHost(values.fromEmail);
+	const verified = host && (await getVerifiedHostnames()).includes(host);
+	const warning = verified
+		? null
+		: `${host || "This domain"} is not verified for sending. The draft is saved; a send stays blocked until SES verifies it.`;
+	return { ok: true, savedAt: Date.now(), warning };
 }

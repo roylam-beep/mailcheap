@@ -4,8 +4,14 @@ import NavFooter from "@/components/NavFooter";
 import NavLinks from "@/components/NavLinks";
 import NavMobile from "@/components/NavMobile";
 import { requireSession } from "@/lib/auth";
+import { ensureOwner } from "@/lib/users";
 
 export default async function AppLayout({ children }) {
+	try {
+		await ensureOwner();
+	} catch (error) {
+		console.error("[auth] Owner bootstrap failed:", error);
+	}
 	await requireSession();
 
 	return (
